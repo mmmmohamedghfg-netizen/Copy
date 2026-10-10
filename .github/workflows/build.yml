@@ -1,0 +1,41 @@
+name: Build Android APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: smart_clip
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unzip project
+        working-directory: .
+        run: unzip -q "*.zip"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Generate Android project
+        run: flutter create --platforms=android --org com.smartclip --project-name smart_clip .
+      - name: Add native accessibility service
+        run: |
+          PKG_DIR=android/app/src/main/kotlin/com/smartclip/smart_clip
+          test -d "$PKG_DIR" || (echo "Package dir not found" && exit 1)
+          mkdir -p android/app/src/main/res/xml android/app/src/main/res/values
+          cp native/*.kt "$PKG_DIR/"
+          cp native/accessibility_service_config.xml android/app/src/main/res/xml/
+          cp native/smartclip_values.xml android/app/src/main/res/values/
+          python3 native/patch_manifest.py
+      - run: flutter pub get
+      - run: dart run flutter_launcher_icons
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smart-clip-apk
+          path: smart_clip/build/app/outputs/flutter-apk/app-release.apk
